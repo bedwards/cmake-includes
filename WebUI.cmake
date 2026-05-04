@@ -6,11 +6,13 @@
 #   1. npm install (idempotent; skipped if node_modules is up to date)
 #   2. npm run build with VITE_MODULUS_VERSION + VITE_UI_VERSION injected so
 #      the footer shows the real plugin/UI versions.
-#   3. Glob ui/dist/* into a juce_add_binary_data target.
+#   3. Glob ui/dist/* into a juce_add_binary_data target named WebUIAssets,
+#      using a dedicated WebUIData namespace + WebUIData.h header so its
+#      symbols don't collide with the generic Assets BinaryData target.
 #
-# A WebUIBuild custom target re-runs the Vite build when ui/src or ui/index.html
-# changes during incremental builds. Re-running CMake configure picks up new
-# files emitted by Vite (Vite hashes asset filenames, so new files appear).
+# Vite emits hashed asset filenames (e.g. index-DhXUedl4.css), so re-running
+# `cmake --build` alone after editing UI sources won't pick up new files. To
+# refresh during dev: `cmake -B build && cmake --build build`.
 
 set(MODULUS_UI_DIR "${CMAKE_CURRENT_SOURCE_DIR}/ui")
 set(MODULUS_UI_DIST "${MODULUS_UI_DIR}/dist")
