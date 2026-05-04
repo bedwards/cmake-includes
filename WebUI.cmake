@@ -26,9 +26,26 @@ if(NOT MODULUS_UI_VERSION)
 endif()
 message(STATUS "WebUI: plugin=${CURRENT_VERSION} ui=${MODULUS_UI_VERSION}")
 
-find_program(NPM_EXECUTABLE npm)
+# Locate npm. On Windows it ships as npm.cmd alongside node.exe, which means
+# CMake's execute_process can't spawn it directly via CreateProcess (only .exe
+# files are spawnable that way). We therefore invoke it through cmd.exe with
+# /c on Windows. find_program(... npm.cmd npm) covers both shapes.
+if(WIN32)
+    find_program(NPM_EXECUTABLE NAMES npm.cmd npm)
+else()
+    find_program(NPM_EXECUTABLE NAMES npm)
+endif()
 if(NOT NPM_EXECUTABLE)
     message(FATAL_ERROR "WebUI: npm not found on PATH. Install Node.js to build the UI bundle.")
+endif()
+message(STATUS "WebUI: using npm at ${NPM_EXECUTABLE}")
+
+# Wrapper used to invoke npm portably. On Windows .cmd scripts must be run
+# through cmd.exe; on POSIX we call the binary directly.
+if(WIN32)
+    set(_modulus_npm_invoke cmd /c "${NPM_EXECUTABLE}")
+else()
+    set(_modulus_npm_invoke "${NPM_EXECUTABLE}")
 endif()
 
 # Install dependencies if node_modules is missing or older than package.json.
@@ -44,7 +61,7 @@ endif()
 if(_need_install)
     message(STATUS "WebUI: running npm install in ${MODULUS_UI_DIR}")
     execute_process(
-        COMMAND "${NPM_EXECUTABLE}" install --no-audit --no-fund
+        COMMAND ${_modulus_npm_invoke} install --no-audit --no-fund
         WORKING_DIRECTORY "${MODULUS_UI_DIR}"
         RESULT_VARIABLE _npm_install_result
     )
@@ -54,13 +71,13 @@ if(_need_install)
 endif()
 
 # Run a production build at configure time so ui/dist/ exists for the
-# binary-data glob below.
+# binary-data glob below. cmake -E env handles the .cmd wrapper too.
 message(STATUS "WebUI: running npm run build")
 execute_process(
     COMMAND "${CMAKE_COMMAND}" -E env
             "VITE_MODULUS_VERSION=${CURRENT_VERSION}"
             "VITE_UI_VERSION=${MODULUS_UI_VERSION}"
-            "${NPM_EXECUTABLE}" run build
+            ${_modulus_npm_invoke} run build
     WORKING_DIRECTORY "${MODULUS_UI_DIR}"
     RESULT_VARIABLE _npm_build_result
 )
